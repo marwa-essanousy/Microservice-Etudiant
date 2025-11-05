@@ -12,6 +12,7 @@ import org.example.etudianttp1.dto.ResponseEtudiantDto;
 import org.example.etudianttp1.entities.Etudiant;
 import org.example.etudianttp1.service.EtudiantServiceImpl;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -40,6 +41,7 @@ public class EtudiantRestController {
                     @ApiResponse(responseCode = "400", description = "Requête invalide")
             }
     )
+    @PreAuthorize("hasAuthority('SCOPE_ADMIN')")
     @PostMapping
     public ResponseEntity<ResponseEtudiantDto> add (@RequestBody RequestEtudiantDto requestEtudiantDto)
     {
@@ -56,7 +58,7 @@ public class EtudiantRestController {
                     @ApiResponse(responseCode = "500", description = "Erreur serveur")
             }
     )
-
+    @PreAuthorize("hasAuthority('SCOPE_USER')")
     @GetMapping
     public ResponseEntity <List<ResponseEtudiantDto>> getall(){
         List<ResponseEtudiantDto> etudiantDtos = etudiantService.getAllEtudiants();
@@ -72,6 +74,7 @@ public class EtudiantRestController {
                     @ApiResponse(responseCode = "404", description = "Étudiant introuvable")
             }
     )
+    @PreAuthorize("hasAuthority('SCOPE_USER')")
     @GetMapping("/{id}")
     public ResponseEntity <ResponseEtudiantDto> get(@PathVariable int id){
         ResponseEtudiantDto responseEtudiantDto = etudiantService.getEtudiantById(id);
@@ -85,6 +88,7 @@ public class EtudiantRestController {
                     @ApiResponse(responseCode = "404", description = "Étudiant introuvable")
             }
     )
+    @PreAuthorize("hasAuthority('SCOPE_ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<ResponseEtudiantDto> update(@PathVariable int id, @RequestBody RequestEtudiantDto dto) {
         ResponseEtudiantDto response = etudiantService.updateEtudiant(dto, id);
@@ -98,7 +102,7 @@ public class EtudiantRestController {
                     @ApiResponse(responseCode = "404", description = "Étudiant introuvable")
             }
     )
-
+    @PreAuthorize("hasAuthority('SCOPE_ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable int id) {
         etudiantService.deleteEtudiant(id);

@@ -10,6 +10,9 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,8 +42,11 @@ public class EtudiantServiceImpl implements EtudiantService {
             ResponseEtudiantDto response = etudiantMapper.Entity_To_DTO(etudiant);
             if (etudiant.getIdFiliere() != null) {
 
+                String token = getBearerToken(); // récupère le token JWT
+
                 FiliereDto filiere = filiereWebClient.get()
                         .uri("/v1/filieres/{id}", etudiant.getIdFiliere())
+                        .headers(headers -> headers.setBearerAuth(token)) // ajoute le token au header
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, clientResponse ->
                                 Mono.error(new RuntimeException("Erreur lors de l'appel Filiere: " + clientResponse.statusCode()))
@@ -48,6 +54,7 @@ public class EtudiantServiceImpl implements EtudiantService {
                         .bodyToMono(FiliereDto.class)
                         .blockOptional()
                         .orElse(null);
+
 
                 // 3. Enrichissement
                 response.setFiliere(filiere);
@@ -60,25 +67,41 @@ public class EtudiantServiceImpl implements EtudiantService {
 
     @Override
     public ResponseEtudiantDto getEtudiantById(int id) {
-        Etudiant etudiant = etudiantRepository.findById(id).orElseThrow();
+        // 1️⃣ Récupérer l'étudiant
+        Etudiant etudiant = etudiantRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Etudiant introuvable avec id " + id));
+
         ResponseEtudiantDto response = etudiantMapper.Entity_To_DTO(etudiant);
 
+        // 2️⃣ Si l'étudiant a une filière, appeler le service filière
         if (etudiant.getIdFiliere() != null) {
-            FiliereDto filiere = filiereWebClient.get()
-                    .uri("/v1/filieres/{id}", etudiant.getIdFiliere())
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, clientResponse ->
-                            Mono.error(new RuntimeException("Erreur lors de l'appel Filiere: " + clientResponse.statusCode()))
-                    )
-                    .bodyToMono(FiliereDto.class)
-                    .blockOptional()
-                    .orElse(null);
+            String token = getBearerToken(); // récupère le token
 
-            response.setFiliere(filiere);
+            try {
+                FiliereDto filiere = filiereWebClient.get()
+                        .uri("/v1/filieres/{id}", etudiant.getIdFiliere())
+                        .headers(headers -> {
+                            if (token != null) headers.setBearerAuth(token);
+                        })
+                        .retrieve()
+                        .onStatus(HttpStatusCode::isError, clientResponse ->
+                                Mono.error(new RuntimeException(
+                                        "Erreur lors de l'appel Filiere: " + clientResponse.statusCode())))
+                        .bodyToMono(FiliereDto.class)
+                        .blockOptional()
+                        .orElse(null);
+
+                response.setFiliere(filiere);
+            } catch (Exception e) {
+                // Si le service filière échoue, on ne casse pas la réponse
+                response.setFiliere(null);
+                System.err.println("Erreur récupération filière : " + e.getMessage());
+            }
         }
-        return response;
 
+        return response;
     }
+
 
     @Override
     public ResponseEtudiantDto updateEtudiant(RequestEtudiantDto requestEtudiantDto, int id) {
@@ -109,4 +132,14 @@ public class EtudiantServiceImpl implements EtudiantService {
         etudiantRepository.deleteById(id);
         return null;
     }
+    public String getBearerToken() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof JwtAuthenticationToken jwtAuth) {
+            return jwtAuth.getToken().getTokenValue();
+        }
+        return null; // ou lever une exception si nécessaire
+    }
+
+
 }
+
